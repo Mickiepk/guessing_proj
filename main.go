@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"time"
@@ -24,7 +25,9 @@ const (
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+
 		corsMiddleware(http.HandlerFunc(loginHandler)).ServeHTTP(w, r)
+
 	})
 	mux.HandleFunc("/guess", func(w http.ResponseWriter, r *http.Request) {
 		corsMiddleware(tokenMiddleware(http.HandlerFunc(guessHandler))).ServeHTTP(w, r)
@@ -53,22 +56,33 @@ func generateHiddenNumber() int {
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
-
-	var credentials struct {
+	type Credentials struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-	
+	type Response struct {
+		Body Credentials `json:"body"`
+	}
+	// var response Response
+	var credentials Credentials
+	// var x interface{}
+	fmt.Println("Login handler")
+
 	//decode json body of the request intio the credential  struct
-	if err := json.NewDecoder(r.Body).Decode(&credentials); err != nil {
+	body, _ := io.ReadAll(r.Body)
+	if err := json.Unmarshal(body, &credentials); err != nil {
 		//if decode fail return bad request
+		fmt.Println(err)
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-	fmt.Println(credentials)
+	fmt.Print("pass")
 	//check if the username and password is correct
+	fmt.Printf("a;%+v\n", credentials)
+
 	if credentials.Username == predefinedUsername && credentials.Password == predefinedPassword {
 		//generate token and send it to the client
+
 		token := generateToken(credentials.Username)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"token": token})
