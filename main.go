@@ -23,9 +23,12 @@ const (
 
 func main() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/login", loginHandler)
+	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+		corsMiddleware(http.HandlerFunc(loginHandler)).ServeHTTP(w, r)
+	})
 	mux.HandleFunc("/guess", func(w http.ResponseWriter, r *http.Request) {
-		tokenMiddleware(http.HandlerFunc(guessHandler)).ServeHTTP(w, r)
+		corsMiddleware(tokenMiddleware(http.HandlerFunc(guessHandler))).ServeHTTP(w, r)
+
 	})
 
 	srv := &http.Server{
@@ -50,16 +53,19 @@ func generateHiddenNumber() int {
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
+
 	var credentials struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
+	
 	//decode json body of the request intio the credential  struct
 	if err := json.NewDecoder(r.Body).Decode(&credentials); err != nil {
 		//if decode fail return bad request
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
+	fmt.Println(credentials)
 	//check if the username and password is correct
 	if credentials.Username == predefinedUsername && credentials.Password == predefinedPassword {
 		//generate token and send it to the client
@@ -110,6 +116,7 @@ func validateToken(token string) bool {
 	return token == bearerPrefix+predefinedToken
 }
 func corsMiddleware(next http.Handler) http.Handler {
+	fmt.Println("CORS middleware")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
