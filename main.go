@@ -61,16 +61,20 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	type Response struct {
-		Body Credentials `json:"body"`
+		Body struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		} `json:"body"`
 	}
 	// var response Response
 	var credentials Credentials
-	// var x interface{}
+	var x interface{}
 	fmt.Println("Login handler")
 
 	//decode json body of the request intio the credential  struct
 	body, _ := io.ReadAll(r.Body)
-	if err := json.Unmarshal(body, &credentials); err != nil {
+	fmt.Println(string(body))
+	if err := json.Unmarshal(body, &x); err != nil {
 		//if decode fail return bad request
 		fmt.Println(err)
 		http.Error(w, "Bad request", http.StatusBadRequest)
@@ -78,11 +82,16 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Print("pass")
 	//check if the username and password is correct
-	fmt.Printf("a;%+v\n", credentials)
-
+	fmt.Printf("a;%+v\n", x)
+	m := x.(map[string]interface{})
+	reqBody := m["body"]
+	fmt.Printf("body: %+v", reqBody)
+	mBody := reqBody.(map[string]interface{})
+	username := mBody["username"]
+	fmt.Println("username: ", username)
 	if credentials.Username == predefinedUsername && credentials.Password == predefinedPassword {
 		//generate token and send it to the client
-
+		
 		token := generateToken(credentials.Username)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"token": token})
