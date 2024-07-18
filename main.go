@@ -38,7 +38,15 @@ func main() {
 	}
 
 	fmt.Println("Server is running on port 8080")
+	if err := srv.ListenAndServe(); err != nil {
+		fmt.Println("Server failed to start:", err)
+	}
 	srv.ListenAndServe()
+}
+
+func generateHiddenNumber() int {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	return r.Intn(100) + 1 // random number from 1 to 100
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -46,16 +54,20 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
+	//decode json body of the request intio the credential  struct
 	if err := json.NewDecoder(r.Body).Decode(&credentials); err != nil {
+		//if decode fail return bad request
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-
+	//check if the username and password is correct
 	if credentials.Username == predefinedUsername && credentials.Password == predefinedPassword {
+		//generate token and send it to the client
 		token := generateToken(credentials.Username)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"token": token})
 	} else {
+		//if the username and password is incorrect return unauthorized
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	}
 }
@@ -96,9 +108,4 @@ func generateToken(username string) string {
 
 func validateToken(token string) bool {
 	return token == bearerPrefix+predefinedToken
-}
-
-func generateHiddenNumber() int {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return r.Intn(100) + 1 // random number from 1 to 100
 }
