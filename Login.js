@@ -15,6 +15,10 @@ const Login = () => {
         const data = await response.json();
         if (data.token) {
             setToken(data.token);
+            setMassage("Login Success")
+        }
+        else {
+            setMassage("Login Failed")
         }
     };
 
@@ -23,8 +27,9 @@ const Login = () => {
             <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" />
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" />
             <button onClick={handleLogin}>Login</button>
+            {message && <p>{message}</p>}
         </div>
     );
-};
+}
 
 export default Login;
