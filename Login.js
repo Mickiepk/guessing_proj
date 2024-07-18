@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from './AuthContext';
-
+import axios from 'axios';
 
 const Login = () => {
     const [username, setUsername] = useState('');
@@ -9,7 +9,8 @@ const Login = () => {
 
     const handleLogin = async () => {
         try {
-            const response = await fetch('http://localhost:8080/login', {
+            console.log('Sending login request to backend:', { username, password });
+            const response = await axios.post('http://localhost:8080/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password })
@@ -20,6 +21,7 @@ const Login = () => {
             }
     
             const data = await response.json();
+            console.log('Received response from backend:', data);
             if (data.token) {
                 setToken(data.token);
                 window.location.href = '/guess';
