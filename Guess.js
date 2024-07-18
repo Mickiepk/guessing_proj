@@ -7,7 +7,7 @@ const Guess = () => {
     const { token } = useContext(AuthContext);
 
     const handleGuess = async () => {
-        const response = await fetch('/guess', {
+        const response = await fetch('http://localhost:8080/guess', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
