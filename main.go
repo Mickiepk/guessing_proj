@@ -1,10 +1,14 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/big"
+	"sync"
+
 	"net/http"
 	"time"
 )
@@ -14,29 +18,29 @@ var (
 	currentGuess = generateHiddenNumber()
 )
 
+var mu sync.Mutex
+
+var userToken string
+
 const (
 	predefinedToken    = "admin_token"
-	predefinedUsername = "admin"
-	predefinedPassword = "password" // You had hardcoded the password in the login check
+	predefinedUsername = "mickie"
+	predefinedPassword = "kuay" // You had hardcoded the password in the login check
 	tokenHeaderKey     = "Authorization"
-	bearerPrefix       = "Bearer "
+	bearerPrefix       = "Bearer"
 )
 
 func main() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 
-		corsMiddleware(http.HandlerFunc(loginHandler)).ServeHTTP(w, r)
+	mux.HandleFunc("POST /login", loginHandler)
+	mux.Handle("POST /guess", tokenMiddleware(http.HandlerFunc(guessHandler)))
 
-	})
-	mux.HandleFunc("/guess", func(w http.ResponseWriter, r *http.Request) {
-		corsMiddleware(tokenMiddleware(http.HandlerFunc(guessHandler))).ServeHTTP(w, r)
-
-	})
+	// mux.Handle("POST /xxx", corsMiddleware(tokenMiddleware(http.HandlerFunc(guessHandler))))
 
 	srv := &http.Server{
 		Addr:           ":8080",
-		Handler:        mux,
+		Handler:        corsMiddleware(mux),
 		MaxHeaderBytes: 1 << 20,
 		ReadTimeout:    time.Minute,
 		WriteTimeout:   time.Minute,
@@ -51,69 +55,63 @@ func main() {
 }
 
 func generateHiddenNumber() int {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return r.Intn(100) + 1 // random number from 1 to 100
+	nBig, err := rand.Int(rand.Reader, big.NewInt(27))
+	if err != nil {
+		panic(err)
+	}
+	return int(nBig.Int64())
+}
+
+type LoginParams struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
-	type Credentials struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
-	type Response struct {
-		Body struct {
-			Username string `json:"username"`
-			Password string `json:"password"`
-		} `json:"body"`
-	}
-	// var response Response
-	var credentials Credentials
-	var x interface{}
-	fmt.Println("Login handler")
+
+	var credentials LoginParams
 
 	//decode json body of the request intio the credential  struct
-	body, _ := io.ReadAll(r.Body)
-	fmt.Println(string(body))
-	if err := json.Unmarshal(body, &x); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&credentials); err != nil {
 		//if decode fail return bad request
-		fmt.Println(err)
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-	fmt.Print("pass")
+	fmt.Printf("%+v", credentials)
 	//check if the username and password is correct
-	fmt.Printf("a;%+v\n", x)
-	m := x.(map[string]interface{})
-	reqBody := m["body"]
-	fmt.Printf("body: %+v", reqBody)
-	mBody := reqBody.(map[string]interface{})
-	username := mBody["username"]
-	fmt.Println("username: ", username)
 	if credentials.Username == predefinedUsername && credentials.Password == predefinedPassword {
 		//generate token and send it to the client
-		
-		token := generateToken(credentials.Username)
+		token := generateToken()
+		userToken = token
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"token": token})
+		currentGuess = generateHiddenNumber()
+		fmt.Println("correct number:", currentGuess)
 	} else {
 		//if the username and password is incorrect return unauthorized
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
 	}
 }
 
 func guessHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println(r.Body)
 	var guessData struct {
-		Guess int `json:"guess"`
+		Guess string `json:"guess"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&guessData); err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
 
-	if guessData.Guess == currentGuess {
-		currentGuess = generateHiddenNumber()
+	// fmt.Println("Current guess:", currentGuess, "User guess:", guessData.Guess)
+
+	if guessData.Guess == fmt.Sprint(currentGuess) {
+
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]string{"message": "Correct guess!"})
+		currentGuess = generateHiddenNumber()
+		fmt.Println("Next correct number:", currentGuess)
 	} else {
 		json.NewEncoder(w).Encode(map[string]string{"message": "Try again!"})
 	}
@@ -130,16 +128,21 @@ func tokenMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func generateToken(username string) string {
-	// This is a placeholder. In a real application, use JWT or another secure method.
-	return fmt.Sprintf("%s_token", username)
+func generateToken() string {
+	var token [32]byte
+	_, err := io.ReadFull(rand.Reader, token[:])
+	if err != nil {
+		panic(err)
+	}
+	return base64.RawStdEncoding.EncodeToString(token[:])
 }
 
 func validateToken(token string) bool {
-	return token == bearerPrefix+predefinedToken
+	return token == bearerPrefix+" "+userToken
 }
+
 func corsMiddleware(next http.Handler) http.Handler {
-	fmt.Println("CORS middleware")
+	// fmt.Println("CORS middleware")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
